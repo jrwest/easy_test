@@ -28,7 +28,7 @@ scan_forms(Forms) ->
 
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
-    HasInit = proplists:get_value(init, Data),
+    HasInit = proplists:get_value(has_config, Data),
     store_export(Name,1),
     case HasInit of
 	true ->

@@ -10,8 +10,8 @@
 
 -include_lib("easy_test/include/easy_test.hrl").
 
--easy_test([{test, autoexport_attr_test_function}, {init, false}]).
--easy_test([{test, autoexport_attr_with_init}, {init, true}]).
+-easy_test([{test, autoexport_attr_test_function}, {has_config, false}]).
+-easy_test([{test, autoexport_attr_with_init}, {has_config, true}]).
 
 
 %% This function should be autoexported and the test 
