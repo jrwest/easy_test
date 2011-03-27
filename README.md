@@ -1,6 +1,6 @@
 ## easy_test
 
-Be more expressive and DRY up (although not so much yet) your Erlang common test suites.
+Be more expressive and DRY up (although not so much yet) your Erlang common test suites. See [Wiki](https://github.com/jrwest/easy_test/wiki) for more information.
 
 ## Currently Implemented
 
