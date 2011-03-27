@@ -14,12 +14,20 @@
 -define(EASY_TEST_DEFAULT_GRP_OPTS, [shuffle]).
 
 -define(EASY_TESTS_ETS, easy_exports).
+-define(EASY_GROUPS_ETS, easy_groups).
 
 parse_transform(Forms, _) ->
     ets:new(?EASY_TESTS_ETS, [ordered_set, protected, named_table]),
+    ets:new(?EASY_GROUPS_ETS, [ordered_set, protected, named_table]),
+    ets:new(group_set(all), [ordered_set, protected, named_table]),
     scan_forms(Forms),
     Result = rewrite(Forms),
+    dump_ets_table(?EASY_GROUPS_ETS),
+    dump_ets_table(group_set(all)),
+    dump_ets_table(group_set(group_1)),
     ets:delete(?EASY_TESTS_ETS),
+    ets:delete(?EASY_GROUPS_ETS),
+    ets:delete(group_set(all)),
     Result.
 
 scan_forms(Forms) ->
@@ -32,7 +40,9 @@ scan_forms(Forms) ->
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
     HasConfig = proplists:get_value(has_config, Data),
+    Group = proplists:get_value(group, Data, all),
     store_export(Name,1),
+    store_test(Group, Name),
     case HasConfig of
 	true ->
 	    store_export(Name, 0);
@@ -43,7 +53,8 @@ form({function, _L, Name, 1, _Cs}, TestPrefix) ->
     NameAsList = atom_to_list(Name),
     case lists:prefix(TestPrefix, NameAsList) of
 	true ->
-	    store_export(Name, 1);
+	    store_export(Name, 1),
+	    store_test(all, Name);
 	false ->
 	    skipped
     end;
@@ -52,6 +63,28 @@ form(_, _) ->
 
 store_export(Name,Arity) ->
     ets:insert(?EASY_TESTS_ETS, {make_ref(), Name, Arity}).
+
+store_test(GroupName, Test) ->
+    GroupSetName = group_set(GroupName),
+    case lists:member(GroupSetName, ets:all()) of
+	true ->	    
+	    ets:insert(GroupSetName, {make_ref(), test, Test});
+	false ->
+	    Parent = all,
+	    store_group(GroupName, Parent),
+	    store_test(GroupName, Test)
+    end.
+
+store_group(GroupName, ParentName) ->
+    GroupSetName = group_set(GroupName),
+    ParentSetName = group_set(ParentName),
+    ets:new(GroupSetName, [ordered_set, protected, named_table]),
+    ets:insert(?EASY_GROUPS_ETS, {GroupName, [], ParentName}),
+    ets:insert(ParentSetName, {make_ref(), group, GroupName}).	   
+		     
+
+group_set(Group) ->
+    list_to_atom("easy_group_" ++ atom_to_list(Group)).
 
 rewrite([{attribute, _, module, _Name}=M | Fs]) ->
     module_decl(M, Fs);
@@ -75,6 +108,7 @@ module_decl(M, Fs) ->
     Es = if ExportAllFun -> [{all, 0} | AllExports];
 	    true -> AllExports end,
     [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
+
 
 fetch_data('$end_of_table', AllAcc, TestsAcc) ->
     {lists:reverse(AllAcc), lists:reverse(TestsAcc)};
@@ -100,3 +134,15 @@ write_all_tests([{Test, 1} | Tests]) ->
     {cons,0,
      {atom,0,Test},
      write_all_tests(Tests)}.
+
+
+%% Used for debugging purposes only
+dump_ets_table(Name) ->
+    io:format("ETS TABLE -- ~p -- ~n", [Name]),
+    dump_ets_table(Name, ets:first(Name)).
+
+dump_ets_table(_, '$end_of_table') ->
+    io:format("Done.~n");
+dump_ets_table(Name, Key) ->
+    io:format("~p~n", [ets:lookup(Name, Key)]),
+    dump_ets_table(Name, ets:next(Name, Key)).

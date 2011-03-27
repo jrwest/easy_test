@@ -10,9 +10,15 @@
 
 -include_lib("easy_test/include/easy_test.hrl").
 
+-export([init_per_group/2]).
+
 -easy_test([{test, autoexport_attr_test_function}, {has_config, false}]).
 -easy_test([{test, autoexport_attr_with_init}, {has_config, true}]).
+-easy_test([{test, grouped_from_test_attr}, {group, group_1}, {has_config, false}]).
 
+
+init_per_group(group_1, Config) ->
+    [{group_1, 1} | Config].
 
 %% This function should be autoexported and the test 
 %% will pass if it is; if not it will fail
@@ -32,6 +38,10 @@ autoexport_attr_with_init() ->
 
 autoexport_attr_with_init(_) ->
     does_contain_export({autoexport_attr_with_init, 0}, ?MODULE).
+
+grouped_from_test_attr(Config) ->
+    does_contain_export({grouped_from_test_attr, 1}, ?MODULE),    
+    1 = ?config(group_1, Config).
 
 does_contain_export(Export, Module) ->
     true = lists:member(Export, Module:module_info(exports)).
