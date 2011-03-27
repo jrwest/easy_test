@@ -47,6 +47,31 @@ rewrite([F | Fs], Exports) -> % skip anything before the module declaration in t
     [F | rewrite(Fs, Exports)];
 rewrite([], _) -> 
     []. % missing module delcaration failsafe
-    
+
+rewrite([{function, _, all, 0, _}=F | Fs], As, {_ExportAllFun, Tests}) ->    
+    rewrite(Fs, [F | As], {false, Tests});
+rewrite([F | Fs], As, ExportData) -> 
+    rewrite(Fs, [F | As], ExportData);
+rewrite([], As, {ExportAllFun, Tests}) -> 
+    {if ExportAllFun ->
+	     write_all(As, Tests);
+	true -> As end, ExportAllFun}.
+
 module_decl(M, Fs, Exports) ->
-    [M, {attribute,0,export,Exports} | Fs].
+    {Fs1, ExportAllFun} = rewrite(Fs, [], {true, lists:reverse(Exports)}),
+    Es = if ExportAllFun -> [{all, 0} | Exports];
+	    true -> Exports end,
+    [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
+
+write_all(As, Tests) ->
+    [{function,0,all,0,
+      [{clause, 0, [], [], [write_all_tests(Tests)]}]} | As].
+
+write_all_tests([]) ->
+    {nil,0};
+write_all_tests([{_, 0} | Tests]) -> % Skip test case config functions
+    write_all_tests(Tests);
+write_all_tests([{Test, 1} | Tests]) ->
+    {cons,0,
+     {atom,0,Test},
+     write_all_tests(Tests)}.

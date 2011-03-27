@@ -10,17 +10,9 @@
 
 -include("../include/easy_test.hrl").
 
--export([all/0]).
-
 -easy_test([{test, autoexport_attr_test_function}, {init, false}]).
 -easy_test([{test, autoexport_attr_with_init}, {init, true}]).
 
-all() ->
-    [test_autoexport_prefixed_function,
-     test_no_autoexport_non_prefix_function,
-     autoexport_attr_test_function,
-     autoexport_attr_with_init].
-    
 
 %% This function should be autoexported and the test 
 %% will pass if it is; if not it will fail
