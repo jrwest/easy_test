@@ -14,38 +14,41 @@
 
 parse_transform(Forms, _) ->
     TestPrefix = ?EASY_TEST_PREFIX,
-    F = fun(Form, Set) ->
-		form(Form, Set, TestPrefix)	       
+    F = fun(Form) ->
+		form(Form, TestPrefix)	       
 	end,
-    Tests = sets:to_list(lists:foldl(F, sets:new(), Forms)),
-    rewrite(Forms, Tests).
+    ets:new(easy_test, [ordered_set, protected, named_table]),
+    lists:foreach(F, Forms),
+    Result = rewrite(Forms),
+    ets:delete(easy_test),
+    Result.
 
-form({attribute, _L, easy_test, Data}, Tests, _) ->
+form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
     HasInit = proplists:get_value(init, Data),
-    Tests1 = sets:add_element({Name, 1}, Tests),
+    ets:insert(easy_test, {make_ref(), Name, 1}),
     case HasInit of
 	true ->
-	    sets:add_element({Name, 0}, Tests1);
+	    ets:insert(easy_test, {make_ref(), Name, 0});
 	_ ->
-	    Tests1
+	    ok
     end;
-form({function, _L, Name, 1, _Cs}, Tests, TestPrefix) ->
+form({function, _L, Name, 1, _Cs}, TestPrefix) ->
     NameAsList = atom_to_list(Name),
     case lists:prefix(TestPrefix, NameAsList) of
 	true ->
-	    sets:add_element({Name, 1}, Tests);
+	    ets:insert(easy_test, {make_ref(), Name, 1});
 	false ->
-	    Tests
+	    skipped
     end;
-form(_, Tests, _) ->
-    Tests.
+form(_, _) ->
+    skipped.
 
-rewrite([{attribute, _, module, _Name}=M | Fs], Exports) ->
-    module_decl(M, Fs, Exports);
-rewrite([F | Fs], Exports) -> % skip anything before the module declaration in the forms list
-    [F | rewrite(Fs, Exports)];
-rewrite([], _) -> 
+rewrite([{attribute, _, module, _Name}=M | Fs]) ->
+    module_decl(M, Fs);
+rewrite([F | Fs]) -> % skip anything before the module declaration in the forms list
+    [F | rewrite(Fs)];
+rewrite([]) -> 
     []. % missing module delcaration failsafe
 
 rewrite([{function, _, all, 0, _}=F | Fs], As, {_ExportAllFun, Tests}) ->    
@@ -57,11 +60,24 @@ rewrite([], As, {ExportAllFun, Tests}) ->
 	     write_all(As, Tests);
 	true -> As end, ExportAllFun}.
 
-module_decl(M, Fs, Exports) ->
-    {Fs1, ExportAllFun} = rewrite(Fs, [], {true, lists:reverse(Exports)}),
-    Es = if ExportAllFun -> [{all, 0} | Exports];
-	    true -> Exports end,
+module_decl(M, Fs) ->
+    {AllExports, Tests} = fetch_data(ets:first(easy_test), [], []),
+    {Fs1, ExportAllFun} = rewrite(Fs, [], {true, Tests}),
+    Es = if ExportAllFun -> [{all, 0} | AllExports];
+	    true -> AllExports end,
     [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
+
+fetch_data('$end_of_table', AllAcc, TestsAcc) ->
+    {lists:reverse(AllAcc), lists:reverse(TestsAcc)};
+fetch_data(Key, AllAcc, TestsAcc) ->
+    [{_, Name, Arity} | _] = ets:lookup(easy_test, Key),
+    Data = {Name, Arity},
+    case Arity of
+	0 ->
+	    fetch_data(ets:next(easy_test, Key), [Data | AllAcc], TestsAcc);
+	1 ->
+	    fetch_data(ets:next(easy_test, Key), [Data | AllAcc], [Data | TestsAcc])
+    end.
 
 write_all(As, Tests) ->
     [{function,0,all,0,

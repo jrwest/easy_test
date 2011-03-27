@@ -8,12 +8,10 @@ Be more expressive and DRY up (although not so much yet) your Erlang common test
     * use module attribute '-easy_test([{test, Name::atom()}, {init, bool()}}).' to automatically
       export function Name/1. if {init, true} is specified export Name/0 as well
     * automatically write and export the all function from all autoexported tests
-      NOTE: this currently does not preserve order
 
 
 ## To Be Implemented
  
-    * Preserve test order by position
     * Support groups and group options through a function name prefix and module attribute
     * Try to make suites more DRY (still need to write test names at least twice, but thats still better
       than atleast three times). 
