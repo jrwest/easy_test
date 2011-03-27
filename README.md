@@ -23,5 +23,5 @@ Be more expressive and DRY up (although not so much yet) your Erlang common test
 
 ## Credits
 
-Thanks to Richard Carlsoon and Mickaël Rémond (authors of [EUnit](http://svn.process-one.net/contribs/trunk/eunit/doc/overview-summary.html)). 
+Thanks to Richard Carlsson and Mickaël Rémond (authors of [EUnit](http://svn.process-one.net/contribs/trunk/eunit/doc/overview-summary.html)). 
 Their code in the eunit_autoexport module forms the basis of this library's functionality.
