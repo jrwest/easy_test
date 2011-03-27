@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(easy_test_autoexport_test_SUITE).
 
--include("../include/easy_test.hrl").
+-include_lib("easy_test/include/easy_test.hrl").
 
 -easy_test([{test, autoexport_attr_test_function}, {init, false}]).
 -easy_test([{test, autoexport_attr_with_init}, {init, true}]).
