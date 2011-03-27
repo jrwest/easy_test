@@ -6,30 +6,33 @@
 %%% @end
 %%% Created : 26 Mar 2011 by Jordan West <jordanrw@gmail.com>
 %%%-------------------------------------------------------------------
--module(easy_test_autoexport).
+-module(easy_test).
 
 -export([parse_transform/2]).
 
 -define(EASY_TEST_PREFIX, "test_").
 
 parse_transform(Forms, _) ->
-    TestPrefix = ?EASY_TEST_PREFIX,
-    F = fun(Form) ->
-		form(Form, TestPrefix)	       
-	end,
     ets:new(easy_test, [ordered_set, protected, named_table]),
-    lists:foreach(F, Forms),
+    scan_forms(Forms),
     Result = rewrite(Forms),
     ets:delete(easy_test),
     Result.
 
+scan_forms(Forms) ->
+    TestPrefix = ?EASY_TEST_PREFIX,
+    F = fun(Form) ->
+		form(Form, TestPrefix)	       
+	end,
+    lists:foreach(F, Forms).
+
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
     HasInit = proplists:get_value(init, Data),
-    ets:insert(easy_test, {make_ref(), Name, 1}),
+    store_export(Name,1),
     case HasInit of
 	true ->
-	    ets:insert(easy_test, {make_ref(), Name, 0});
+	    store_export(Name, 0);
 	_ ->
 	    ok
     end;
@@ -37,12 +40,15 @@ form({function, _L, Name, 1, _Cs}, TestPrefix) ->
     NameAsList = atom_to_list(Name),
     case lists:prefix(TestPrefix, NameAsList) of
 	true ->
-	    ets:insert(easy_test, {make_ref(), Name, 1});
+	    store_export(Name, 1);
 	false ->
 	    skipped
     end;
 form(_, _) ->
     skipped.
+
+store_export(Name,Arity) ->
+    ets:insert(easy_test, {make_ref(), Name, Arity}).
 
 rewrite([{attribute, _, module, _Name}=M | Fs]) ->
     module_decl(M, Fs);

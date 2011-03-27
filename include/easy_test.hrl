@@ -7,7 +7,7 @@
 %%% Created : 26 Mar 2011 by Jordan West <jordanrw@gmail.com>
 %%%-------------------------------------------------------------------
 
--compile({parse_transform, easy_test_autoexport}).
+-compile({parse_transform, easy_test}).
 
 -include_lib("common_test/include/ct.hrl").
 
