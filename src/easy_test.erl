@@ -22,9 +22,6 @@ parse_transform(Forms, _) ->
     ets:new(group_set(all), [ordered_set, protected, named_table]),
     scan_forms(Forms),
     Result = rewrite(Forms),
-    dump_ets_table(?EASY_GROUPS_ETS),
-    dump_ets_table(group_set(all)),
-    dump_ets_table(group_set(group_1)),
     ets:delete(?EASY_TESTS_ETS),
     ets:delete(?EASY_GROUPS_ETS),
     ets:delete(group_set(all)),
@@ -99,41 +96,46 @@ rewrite([F | Fs], As, ExportData) ->
     rewrite(Fs, [F | As], ExportData);
 rewrite([], As, {ExportAllFun, Tests}) -> 
     {if ExportAllFun ->
-	     write_all(As, Tests);
+	     write_all0(As, Tests);
 	true -> As end, ExportAllFun}.
 
 module_decl(M, Fs) ->
-    {AllExports, Tests} = fetch_data(ets:first(?EASY_TESTS_ETS), [], []),
+    AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
+    Tests = fetch_table_data(group_set(all)),
     {Fs1, ExportAllFun} = rewrite(Fs, [], {true, Tests}),
     Es = if ExportAllFun -> [{all, 0} | AllExports];
 	    true -> AllExports end,
     [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
 
+fetch_table_data(Table) ->
+    fetch_data(Table, ets:first(Table), []).
 
-fetch_data('$end_of_table', AllAcc, TestsAcc) ->
-    {lists:reverse(AllAcc), lists:reverse(TestsAcc)};
-fetch_data(Key, AllAcc, TestsAcc) ->
-    [{_, Name, Arity} | _] = ets:lookup(?EASY_TESTS_ETS, Key),
-    Data = {Name, Arity},
-    case Arity of
-	0 ->
-	    fetch_data(ets:next(?EASY_TESTS_ETS, Key), [Data | AllAcc], TestsAcc);
-	1 ->
-	    fetch_data(ets:next(?EASY_TESTS_ETS, Key), [Data | AllAcc], [Data | TestsAcc])
-    end.
+fetch_data(_T, '$end_of_table', Acc) ->
+    lists:reverse(Acc);
+fetch_data(Table, Key, Acc) ->
+    [Data | _] = ets:lookup(Table, Key),
+    fetch_data(Table, ets:next(Table, Key), [Data | Acc]).
 
-write_all(As, Tests) ->
+prepare_exports([], Acc) ->
+    lists:reverse(Acc);
+prepare_exports([H | T], Acc) ->
+    {_, Name, Arity} = H,
+    prepare_exports(T, [{Name, Arity} | Acc]).
+
+write_all0(As, Tests) ->
     [{function,0,all,0,
-      [{clause, 0, [], [], [write_all_tests(Tests)]}]} | As].
+      [{clause, 0, [], [], [write_all_data(Tests)]}]} | As].
 
-write_all_tests([]) ->
-    {nil,0};
-write_all_tests([{_, 0} | Tests]) -> % Skip test case config functions
-    write_all_tests(Tests);
-write_all_tests([{Test, 1} | Tests]) ->
+write_all_data([]) ->
+    {nil, 0};
+write_all_data([{_, group, Group} | Tests]) ->
+    {cons,0,
+     {tuple,0,[{atom,0,group},{atom,0,Group}]},
+     write_all_data(Tests)};
+write_all_data([{_, test, Test} | Tests]) ->
     {cons,0,
      {atom,0,Test},
-     write_all_tests(Tests)}.
+     write_all_data(Tests)}.
 
 
 %% Used for debugging purposes only
