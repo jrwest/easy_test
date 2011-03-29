@@ -34,15 +34,15 @@ scan_forms(Forms) ->
     lists:foreach(F, Forms).
 
 form({attribute, _L, easy_group, Data}, _) ->
-    Name = proplists:get_value(group, Data),
-    Context = proplists:get_value(context, Data, all),
-    Opts = proplists:get_value(opts, Data, ?EASY_GROUP_DEFAULT_OPTS),
-    Tests = proplists:get_value(tests, Data, []),
+    Name = get_required_value(Data,group),
+    Context = get_optional_value(Data, context, all),
+    Opts = get_optional_value(Data, opts, ?EASY_GROUP_DEFAULT_OPTS),
+    Tests = get_optional_value(Data, tests, []),
     store_or_update_group(Name, Context, Opts, Tests);
 form({attribute, _L, easy_test, Data},  _) ->
-    Name = proplists:get_value(test, Data),
-    HasConfig = proplists:get_value(has_config, Data, false),
-    Group = proplists:get_value(group, Data, all),
+    Name = get_required_value(Data, test),
+    HasConfig = get_optional_value(Data, has_config, false),
+    Group = get_optional_value(Data, group, all),
     store_export(Name,1),
     store_test(Group, Name),
     case HasConfig of
@@ -181,6 +181,17 @@ fetch_data(_T, '$end_of_table', Acc) ->
 fetch_data(Table, Key, Acc) ->
     [Data | _] = ets:lookup(Table, Key),
     fetch_data(Table, ets:next(Table, Key), [Data | Acc]).
+
+get_required_value(Data,Key) ->
+    case proplists:get_value(Key, Data) of
+	undefined ->
+	    throw({easy_test, {missing_required_field, Key}});
+	Val ->
+	    Val
+    end.
+
+get_optional_value(Data,Key,Default) ->
+    proplists:get_value(Key, Data, Default).
 
 prepare_exports([], Acc) ->
     lists:reverse(Acc);
