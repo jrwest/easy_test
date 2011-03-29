@@ -16,6 +16,8 @@
 -define(EASY_TESTS_ETS, easy_exports).
 -define(EASY_GROUPS_ETS, easy_groups).
 
+-define(EASY_GROUP_DEFAULT_OPTS, [shuffle]).
+
 parse_transform(Forms, _) ->
     create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
     scan_forms(Forms),
@@ -90,7 +92,7 @@ store_group(GroupName, ParentName) ->
     ParentSetName = group_table_name(ParentName),
     GroupSetName = group_table_name(GroupName),
     create_table(GroupSetName),
-    ets:insert(?EASY_GROUPS_ETS, {GroupName, [], ParentName}),
+    ets:insert(?EASY_GROUPS_ETS, {GroupName, ?EASY_GROUP_DEFAULT_OPTS, ParentName}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
 
