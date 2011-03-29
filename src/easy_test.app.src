@@ -1,7 +1,7 @@
 {application, "easy_test",
  [
   {description, ""},
-  {vsn, "1"},
+  {vsn, "0.0.0"},
   {registered, []},
   {applications, [
                   kernel,
