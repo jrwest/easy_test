@@ -33,7 +33,7 @@ scan_forms(Forms) ->
 
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
-    HasConfig = proplists:get_value(has_config, Data),
+    HasConfig = proplists:get_value(has_config, Data, false),
     Group = proplists:get_value(group, Data, all),
     store_export(Name,1),
     store_test(Group, Name),

@@ -15,7 +15,7 @@
 -easy_test([{test, autoexport_attr_test_function}, {has_config, false}]).
 -easy_test([{test, autoexport_attr_with_init}, {has_config, true}]).
 -easy_test([{test, grouped_from_test_attr}, {group, group_1}, {has_config, false}]).
--easy_test([{test, explicit_all_group}, {group, all}, {has_config, false}]).
+-easy_test([{test, explicit_all_group}, {group, all}]). % has config defaults to 'false'
 
 init_per_suite(Config) ->
     [{global, 0} | Config].
