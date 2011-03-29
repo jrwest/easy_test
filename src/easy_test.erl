@@ -90,22 +90,25 @@ rewrite([F | Fs]) -> % skip anything before the module declaration in the forms 
 rewrite([]) -> 
     []. % missing module delcaration failsafe
 
-rewrite([{function, _, all, 0, _}=F | Fs], As, {_ExportAllFun, Tests}) ->    
-    rewrite(Fs, [F | As], {false, Tests});
+rewrite([{function, _, all, 0, _}=F | Fs], As, {_, ExportGroups}) ->    
+    rewrite(Fs, [F | As], {false, ExportGroups});
+rewrite([{function, _, groups, 0, _}=F | Fs], As, {ExportAll, _}) ->
+    rewrite(Fs, [F | As], {ExportAll, false});
 rewrite([F | Fs], As, ExportData) -> 
     rewrite(Fs, [F | As], ExportData);
-rewrite([], As, {ExportAllFun, Tests}) -> 
-    {if ExportAllFun ->
-	     write_all0(As, Tests);
-	true -> As end, ExportAllFun}.
+rewrite([], As, {ExportAllFun, ExportGroupsFun}) ->
+    Final = write_all(write_groups(As, ExportGroupsFun), ExportAllFun),
+    {Final, {ExportAllFun, ExportGroupsFun}}.
+	
 
 module_decl(M, Fs) ->
     AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
-    Tests = fetch_table_data(group_set(all)),
-    {Fs1, ExportAllFun} = rewrite(Fs, [], {true, Tests}),
+    {Fs1, {ExportAllFun, ExportGroupsFun}} = rewrite(Fs, [], {true, true}),
     Es = if ExportAllFun -> [{all, 0} | AllExports];
 	    true -> AllExports end,
-    [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
+    Es1 = if ExportGroupsFun -> [{groups, 0} | Es];
+	     true -> Es end,
+    [M, {attribute,0,export,Es1} | lists:reverse(Fs1)].
 
 fetch_table_data(Table) ->
     fetch_data(Table, ets:first(Table), []).
@@ -122,20 +125,53 @@ prepare_exports([H | T], Acc) ->
     {_, Name, Arity} = H,
     prepare_exports(T, [{Name, Arity} | Acc]).
 
+write_groups(As, false) ->
+    As;
+write_groups(As, true) ->
+    Groups = fetch_table_data(?EASY_GROUPS_ETS),
+    write_groups0(As, Groups).
+
+write_groups0(As, Groups) ->
+    [{function,0,groups,0,
+      [{clause,0,[],[],[write_groups_data(Groups)]}]} | As].
+
+write_groups_data([]) ->
+    {nil, 0};
+write_groups_data([{Group, Opts, _} | Groups]) ->
+    Tests = fetch_table_data(group_set(Group)),
+    {cons,0,
+     {tuple,0,[{atom,0,Group},
+	       write_group_opts(Opts),
+	       write_test_list(Tests)]},
+     write_groups_data(Groups)}.
+
+write_group_opts([]) ->
+    {nil, 0};
+write_group_opts([Opt | Opts]) when is_atom(Opt) ->
+    {cons,0,
+     {atom,0,Opt},
+     write_group_opts(Opts)}.
+
+write_all(As, false) ->
+    As;
+write_all(As, true) ->
+    Tests = fetch_table_data(group_set(all)),
+    write_all0(As, Tests).
+
 write_all0(As, Tests) ->
     [{function,0,all,0,
-      [{clause, 0, [], [], [write_all_data(Tests)]}]} | As].
+      [{clause, 0, [], [], [write_test_list(Tests)]}]} | As].
 
-write_all_data([]) ->
+write_test_list([]) ->
     {nil, 0};
-write_all_data([{_, group, Group} | Tests]) ->
+write_test_list([{_, group, Group} | Tests]) ->
     {cons,0,
      {tuple,0,[{atom,0,group},{atom,0,Group}]},
-     write_all_data(Tests)};
-write_all_data([{_, test, Test} | Tests]) ->
+     write_test_list(Tests)};
+write_test_list([{_, test, Test} | Tests]) ->
     {cons,0,
      {atom,0,Test},
-     write_all_data(Tests)}.
+     write_test_list(Tests)}.
 
 
 %% Used for debugging purposes only
