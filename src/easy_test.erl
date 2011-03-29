@@ -45,21 +45,14 @@ form({attribute, _L, easy_test, Data},  _) ->
     Group = get_optional_value(Data, group, all),
     store_export(Name,1),
     store_test(Group, Name),
-    case HasConfig of
-	true ->
-	    store_export(Name, 0);
-	_ ->
-	    ok
-    end;
+    apply_if_true(HasConfig, fun store_export/2, [Name, 0]);
 form({function, _L, Name, 1, _Cs}, TestPrefix) ->
     NameAsList = atom_to_list(Name),
-    case lists:prefix(TestPrefix, NameAsList) of
-	true ->
-	    store_export(Name, 1),
-	    store_test(all, Name);
-	false ->
-	    skipped
-    end;
+    apply_if_true(lists:prefix(TestPrefix, NameAsList),
+	          [fun store_export/2,
+		   fun store_test/2],
+	          [[Name, 1],
+		   [all, Name]]);
 form(_, _) ->
     skipped.
 
@@ -247,6 +240,18 @@ write_test_list([{_, test, Test} | Tests]) ->
      {atom,0,Test},
      write_test_list(Tests)}.
 
+apply_if_true(_, [], _) ->
+    ok;
+apply_if_true(Bool, [F | Fs], [Args | ArgsList]) ->
+    apply_if_true(Bool, F, Args),
+    apply_if_true(Bool, Fs, ArgsList);
+apply_if_true(Bool, F, Args) when is_function(F) andalso is_list(Args) ->
+    case Bool of 
+	true ->
+	    apply(F, Args);
+	_ ->
+	    false
+    end.
 
 %% Used for debugging purposes only
 dump_ets_table(Name) ->
