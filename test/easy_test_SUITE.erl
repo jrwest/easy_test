@@ -21,7 +21,8 @@
 -easy_test([{test, nested_test_1}, {group, group_2}]).
 -easy_group([{group, group_4}, {context, group_1}]).
 -easy_test([{test, double_nested_test}, {group, group_4}]).
--easy_group([{group, group_5}, {opts, [shuffle]}, {tests, [group_attr_test]}]).
+-easy_group([{group, group_5}, {opts, [shuffle, sequence]}, {tests, [group_attr_test]}]).
+-easy_group([{group, group_6}, {context, group_2}, {tests, [running_out_of_names_1, running_out_of_names_2]}]).
 
 init_per_suite(Config) ->
     [{global, 0} | Config].
@@ -38,7 +39,10 @@ init_per_group(group_3, Config) ->
 init_per_group(group_4, Config) ->
     [{group_4, 4} | Config];
 init_per_group(group_5, Config) ->
-    [{group_5, 5} | Config].
+    [{group_5, 5} | Config];
+init_per_group(group_6, Config) ->
+    [{group_6, 6} | Config].
+
 
 
 end_per_group(_, _) ->
@@ -87,6 +91,20 @@ group_attr_test(Config) ->
     does_contain_export({group_attr_test, 1}, ?MODULE),
     0 = ?config(global, Config),
     5 = ?config(group_5, Config).    
+
+running_out_of_names_1(Config) ->
+    0 = ?config(global, Config),
+    1 = ?config(group_1, Config),
+    2 = ?config(group_2, Config),
+    undefined = ?config(group_4, Config),
+    6 = ?config(group_6, Config).
+
+running_out_of_names_2(Config) ->
+    0 = ?config(global, Config),
+    1 = ?config(group_1, Config),
+    2 = ?config(group_2, Config),
+    undefined = ?config(group_4, Config),
+    6 = ?config(group_6, Config).
 
 does_contain_export(Export, Module) ->
     true = lists:member(Export, Module:module_info(exports)).
