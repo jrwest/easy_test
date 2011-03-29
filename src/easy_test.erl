@@ -36,7 +36,9 @@ scan_forms(Forms) ->
 form({attribute, _L, easy_group, Data}, _) ->
     Name = proplists:get_value(group, Data),
     Context = proplists:get_value(context, Data, all),
-    store_or_update_group(Name, Context);
+    Opts = proplists:get_value(opts, Data, ?EASY_GROUP_DEFAULT_OPTS),
+    Tests = proplists:get_value(tests, Data, []),
+    store_or_update_group(Name, Context, Opts, Tests);
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
     HasConfig = proplists:get_value(has_config, Data, false),
@@ -64,19 +66,21 @@ form(_, _) ->
 store_export(Name,Arity) ->
     ets:insert(?EASY_TESTS_ETS, {make_ref(), Name, Arity}).
 
+
 store_test(GroupName, Test) ->
     store_group_if_dne(GroupName),
     GroupSetName = group_table_name(GroupName),
     ets:insert(GroupSetName, {make_ref(), test, Test}).
 
-store_or_update_group(Name, Context) ->
+store_or_update_group(Name, Context, Opts, Tests) ->
     case ets:lookup(?EASY_GROUPS_ETS, Name) of
 	[] ->
-	    store_group(Name, Context);
-	[{N, O, OldContext} | _] ->
+	    store_group(Name, Context, Opts);
+	[{N, _O, OldContext} | _] ->
 	    move_group(OldContext, Context, Name),
-	    ets:insert(?EASY_GROUPS_ETS, {N, O, Context})
-    end.
+	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context})
+    end,
+    store_group_attr_tests(Name, Tests).
 
 store_group_if_dne(GroupName) ->
     GroupTableName = group_table_name(GroupName),
@@ -89,11 +93,14 @@ store_group_if_dne(GroupName) ->
     end.
 
 store_group(GroupName, ParentName) ->
+    store_group(GroupName, ParentName, ?EASY_GROUP_DEFAULT_OPTS).
+
+store_group(GroupName, ParentName, Opts) ->
     store_group_if_dne(ParentName),
     ParentSetName = group_table_name(ParentName),
     GroupSetName = group_table_name(GroupName),
     create_table(GroupSetName),
-    ets:insert(?EASY_GROUPS_ETS, {GroupName, ?EASY_GROUP_DEFAULT_OPTS, ParentName}),
+    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, ParentName}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
 move_group(OldContext, NewContext, GroupName) ->
@@ -101,6 +108,13 @@ move_group(OldContext, NewContext, GroupName) ->
     NewContextName = group_table_name(NewContext),
     ets:match_delete(OldContextName, {'_', group, GroupName}),
     ets:insert(NewContextName, {make_ref(), group, GroupName}).
+
+store_group_attr_tests(_, []) ->
+    ok;
+store_group_attr_tests(Name, [T | Ts]) ->
+    store_test(Name, T),
+    store_export(T, 1),
+    store_group_attr_tests(Name, Ts).
 
 group_table_name(Group) ->
     list_to_atom("easy_group_" ++ atom_to_list(Group)).

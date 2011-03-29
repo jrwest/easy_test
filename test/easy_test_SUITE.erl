@@ -21,6 +21,7 @@
 -easy_test([{test, nested_test_1}, {group, group_2}]).
 -easy_group([{group, group_4}, {context, group_1}]).
 -easy_test([{test, double_nested_test}, {group, group_4}]).
+-easy_group([{group, group_5}, {opts, [shuffle]}, {tests, [group_attr_test]}]).
 
 init_per_suite(Config) ->
     [{global, 0} | Config].
@@ -35,7 +36,9 @@ init_per_group(group_2, Config) ->
 init_per_group(group_3, Config) ->
     [{group_3, 3} | Config];
 init_per_group(group_4, Config) ->
-    [{group_4, 4} | Config].
+    [{group_4, 4} | Config];
+init_per_group(group_5, Config) ->
+    [{group_5, 5} | Config].
 
 
 end_per_group(_, _) ->
@@ -79,6 +82,11 @@ double_nested_test(Config) ->
     0 = ?config(global, Config),
     1 = ?config(group_1, Config),
     4 = ?config(group_4, Config).
+
+group_attr_test(Config) ->
+    does_contain_export({group_attr_test, 1}, ?MODULE),
+    0 = ?config(global, Config),
+    5 = ?config(group_5, Config).    
 
 does_contain_export(Export, Module) ->
     true = lists:member(Export, Module:module_info(exports)).
