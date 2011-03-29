@@ -17,15 +17,11 @@
 -define(EASY_GROUPS_ETS, easy_groups).
 
 parse_transform(Forms, _) ->
-    ets:new(?EASY_TESTS_ETS, [ordered_set, protected, named_table]),
-    ets:new(?EASY_GROUPS_ETS, [ordered_set, protected, named_table]),
-    ets:new(group_set(all), [ordered_set, protected, named_table]),
+    create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
     scan_forms(Forms),
     Result = rewrite(Forms),
     cleanup_group_tables(),
-    ets:delete(?EASY_TESTS_ETS),
-    ets:delete(?EASY_GROUPS_ETS),
-    ets:delete(group_set(all)),
+    delete_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
     Result.
 
 scan_forms(Forms) ->
@@ -63,7 +59,7 @@ store_export(Name,Arity) ->
     ets:insert(?EASY_TESTS_ETS, {make_ref(), Name, Arity}).
 
 store_test(GroupName, Test) ->
-    GroupSetName = group_set(GroupName),
+    GroupSetName = group_table_name(GroupName),
     case lists:member(GroupSetName, ets:all()) of
 	true ->	    
 	    ets:insert(GroupSetName, {make_ref(), test, Test});
@@ -74,14 +70,14 @@ store_test(GroupName, Test) ->
     end.
 
 store_group(GroupName, ParentName) ->
-    GroupSetName = group_set(GroupName),
-    ParentSetName = group_set(ParentName),
-    ets:new(GroupSetName, [ordered_set, protected, named_table]),
+    GroupSetName = group_table_name(GroupName),
+    ParentSetName = group_table_name(ParentName),
+    create_table(GroupSetName),
     ets:insert(?EASY_GROUPS_ETS, {GroupName, [], ParentName}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).	   
 		     
 
-group_set(Group) ->
+group_table_name(Group) ->
     list_to_atom("easy_group_" ++ atom_to_list(Group)).
 
 cleanup_group_tables() ->
@@ -90,7 +86,7 @@ cleanup_group_tables() ->
 cleanup_group_tables('$end_of_table') ->
     ok;
 cleanup_group_tables(Key) ->
-    ets:delete(group_set(Key)),
+    delete_table(group_table_name(Key)),
     cleanup_group_tables(ets:next(?EASY_GROUPS_ETS, Key)).
 
 rewrite([{attribute, _, module, _Name}=M | Fs]) ->
@@ -120,6 +116,24 @@ module_decl(M, Fs) ->
 	     true -> Es end,
     [M, {attribute,0,export,Es1} | lists:reverse(Fs1)].
 
+create_tables([]) ->
+    ok;
+create_tables([T | Ts]) ->
+    create_table(T),
+    create_tables(Ts).
+
+create_table(TableName) ->
+    ets:new(TableName, [ordered_set, protected, named_table]).
+
+
+delete_tables([]) ->
+    ok;
+delete_tables([T | Ts]) ->
+    delete_table(T),
+    delete_tables(Ts).
+
+delete_table(TableName) -> ets:delete(TableName).
+
 fetch_table_data(Table) ->
     fetch_data(Table, ets:first(Table), []).
 
@@ -148,7 +162,7 @@ write_groups0(As, Groups) ->
 write_groups_data([]) ->
     {nil, 0};
 write_groups_data([{Group, Opts, _} | Groups]) ->
-    Tests = fetch_table_data(group_set(Group)),
+    Tests = fetch_table_data(group_table_name(Group)),
     {cons,0,
      {tuple,0,[{atom,0,Group},
 	       write_group_opts(Opts),
@@ -165,7 +179,7 @@ write_group_opts([Opt | Opts]) when is_atom(Opt) ->
 write_all(As, false) ->
     As;
 write_all(As, true) ->
-    Tests = fetch_table_data(group_set(all)),
+    Tests = fetch_table_data(group_table_name(all)),
     write_all0(As, Tests).
 
 write_all0(As, Tests) ->
