@@ -10,12 +10,10 @@
 
 -export([parse_transform/2]).
 
--define(EASY_TEST_PREFIX, "test_").
--define(EASY_TEST_DEFAULT_GRP_OPTS, [shuffle]).
-
 -define(EASY_TESTS_ETS, easy_exports).
 -define(EASY_GROUPS_ETS, easy_groups).
 
+-define(EASY_TEST_PREFIX, "test_").
 -define(EASY_GROUP_DEFAULT_OPTS, [shuffle]).
 
 parse_transform(Forms, _) ->
