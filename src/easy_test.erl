@@ -22,6 +22,7 @@ parse_transform(Forms, _) ->
     ets:new(group_set(all), [ordered_set, protected, named_table]),
     scan_forms(Forms),
     Result = rewrite(Forms),
+    cleanup_group_tables(),
     ets:delete(?EASY_TESTS_ETS),
     ets:delete(?EASY_GROUPS_ETS),
     ets:delete(group_set(all)),
@@ -82,6 +83,15 @@ store_group(GroupName, ParentName) ->
 
 group_set(Group) ->
     list_to_atom("easy_group_" ++ atom_to_list(Group)).
+
+cleanup_group_tables() ->
+    cleanup_group_tables(ets:first(?EASY_GROUPS_ETS)).
+
+cleanup_group_tables('$end_of_table') ->
+    ok;
+cleanup_group_tables(Key) ->
+    ets:delete(group_set(Key)),
+    cleanup_group_tables(ets:next(?EASY_GROUPS_ETS, Key)).
 
 rewrite([{attribute, _, module, _Name}=M | Fs]) ->
     module_decl(M, Fs);
