@@ -212,6 +212,11 @@ write_groups_data([{Group, Opts, _} | Groups]) ->
 
 write_group_opts([]) ->
     {nil, 0};
+write_group_opts([{R, T} | Opts]) ->
+    {cons,0,
+     {tuple,0,[{atom,0,R},
+	       {atom,0,T}]},
+     write_group_opts(Opts)};
 write_group_opts([Opt | Opts]) when is_atom(Opt) ->
     {cons,0,
      {atom,0,Opt},

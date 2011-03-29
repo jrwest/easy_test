@@ -21,7 +21,7 @@
 -easy_test([{test, nested_test_1}, {group, group_2}]).
 -easy_group([{group, group_4}, {context, group_1}]).
 -easy_test([{test, double_nested_test}, {group, group_4}]).
--easy_group([{group, group_5}, {opts, [shuffle, sequence]}, {tests, [group_attr_test]}]).
+-easy_group([{group, group_5}, {opts, [shuffle, sequence, {repeat_until_any_ok, 5}]}, {tests, [group_attr_test]}]).
 -easy_group([{group, group_6}, {context, group_2}, {tests, [running_out_of_names_1, running_out_of_names_2]}]).
 
 init_per_suite(Config) ->
