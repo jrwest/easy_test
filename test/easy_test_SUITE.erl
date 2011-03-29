@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 26 Mar 2011 by Jordan West <jordanrw@gmail.com>
 %%%-------------------------------------------------------------------
--module(easy_test_autoexport_test_SUITE).
+-module(easy_test_SUITE).
 
 -include_lib("easy_test/include/easy_test.hrl").
 
