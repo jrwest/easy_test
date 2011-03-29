@@ -13,11 +13,14 @@
 -export([init_per_group/2, end_per_group/2, init_per_suite/1, end_per_suite/1]).
 
 -easy_group([{group, group_2}, {context, group_1}]).
+-easy_group([{group, group_3}, {context, group_4}]).
 -easy_test([{test, autoexport_attr_test_function}, {has_config, false}]).
 -easy_test([{test, autoexport_attr_with_init}, {has_config, true}]).
 -easy_test([{test, grouped_from_test_attr}, {group, group_1}, {has_config, false}]).
 -easy_test([{test, explicit_all_group}, {group, all}]). % has config defaults to 'false'
 -easy_test([{test, nested_test_1}, {group, group_2}]).
+-easy_group([{group, group_4}, {context, group_1}]).
+-easy_test([{test, double_nested_test}, {group, group_4}]).
 
 init_per_suite(Config) ->
     [{global, 0} | Config].
@@ -28,7 +31,12 @@ end_per_suite(_) ->
 init_per_group(group_1, Config) ->
     [{group_1, 1} | Config];
 init_per_group(group_2, Config) ->
-    [{group_2, 2} | Config].
+    [{group_2, 2} | Config];
+init_per_group(group_3, Config) ->
+    [{group_3, 3} | Config];
+init_per_group(group_4, Config) ->
+    [{group_4, 4} | Config].
+
 
 end_per_group(_, _) ->
     ok.
@@ -65,6 +73,12 @@ nested_test_1(Config) ->
     0 = ?config(global, Config),
     1 = ?config(group_1, Config),
     2 = ?config(group_2, Config).
+
+double_nested_test(Config) ->
+    does_contain_export({double_nested_test, 1}, ?MODULE),
+    0 = ?config(global, Config),
+    1 = ?config(group_1, Config),
+    4 = ?config(group_4, Config).
 
 does_contain_export(Export, Module) ->
     true = lists:member(Export, Module:module_info(exports)).

@@ -73,8 +73,9 @@ store_or_update_group(Name, Context) ->
     case ets:lookup(?EASY_GROUPS_ETS, Name) of
 	[] ->
 	    store_group(Name, Context);
-	[{N, O, _C} | _] ->
-	    ets:store(?EASY_GROUPS_ETS, {N, O, Context})
+	[{N, O, OldContext} | _] ->
+	    move_group(OldContext, Context, Name),
+	    ets:insert(?EASY_GROUPS_ETS, {N, O, Context})
     end.
 
 store_group_if_dne(GroupName) ->
@@ -95,6 +96,11 @@ store_group(GroupName, ParentName) ->
     ets:insert(?EASY_GROUPS_ETS, {GroupName, ?EASY_GROUP_DEFAULT_OPTS, ParentName}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
+move_group(OldContext, NewContext, GroupName) ->
+    OldContextName = group_table_name(OldContext),
+    NewContextName = group_table_name(NewContext),
+    ets:match_delete(OldContextName, {'_', group, GroupName}),
+    ets:insert(NewContextName, {make_ref(), group, GroupName}).
 
 group_table_name(Group) ->
     list_to_atom("easy_group_" ++ atom_to_list(Group)).
