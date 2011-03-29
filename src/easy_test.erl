@@ -31,6 +31,10 @@ scan_forms(Forms) ->
 	end,
     lists:foreach(F, Forms).
 
+form({attribute, _L, easy_group, Data}, _) ->
+    Name = proplists:get_value(group, Data),
+    Context = proplists:get_value(context, Data, all),
+    store_or_update_group(Name, Context);
 form({attribute, _L, easy_test, Data},  _) ->
     Name = proplists:get_value(test, Data),
     HasConfig = proplists:get_value(has_config, Data, false),
@@ -59,22 +63,35 @@ store_export(Name,Arity) ->
     ets:insert(?EASY_TESTS_ETS, {make_ref(), Name, Arity}).
 
 store_test(GroupName, Test) ->
+    store_group_if_dne(GroupName),
     GroupSetName = group_table_name(GroupName),
-    case lists:member(GroupSetName, ets:all()) of
-	true ->	    
-	    ets:insert(GroupSetName, {make_ref(), test, Test});
+    ets:insert(GroupSetName, {make_ref(), test, Test}).
+
+store_or_update_group(Name, Context) ->
+    case ets:lookup(?EASY_GROUPS_ETS, Name) of
+	[] ->
+	    store_group(Name, Context);
+	[{N, O, _C} | _] ->
+	    ets:store(?EASY_GROUPS_ETS, {N, O, Context})
+    end.
+
+store_group_if_dne(GroupName) ->
+    GroupTableName = group_table_name(GroupName),
+    case lists:member(GroupTableName, ets:all()) of
 	false ->
-	    Parent = all,
-	    store_group(GroupName, Parent),
-	    store_test(GroupName, Test)
+	    store_group(GroupName, all),
+	    created;
+	true ->
+	    existed
     end.
 
 store_group(GroupName, ParentName) ->
-    GroupSetName = group_table_name(GroupName),
+    store_group_if_dne(ParentName),
     ParentSetName = group_table_name(ParentName),
+    GroupSetName = group_table_name(GroupName),
     create_table(GroupSetName),
     ets:insert(?EASY_GROUPS_ETS, {GroupName, [], ParentName}),
-    ets:insert(ParentSetName, {make_ref(), group, GroupName}).	   
+    ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
 
 group_table_name(Group) ->
