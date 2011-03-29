@@ -22,6 +22,7 @@ Be more expressive and DRY up (although not so much yet) your Erlang common test
     * Autoexport init_per_[suite | group | testcase] or provide some convention so init_per_* can be written like all/0
     * Provide a module attribute to define suite opts and use it to write suite/0
     * support '-easy_test(...)' Opts in -easy_group
+    * refactor to use erl_parse:abstract instead of explicitly writing each update to the AST. 
 
 ## Credits
 
