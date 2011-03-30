@@ -24,7 +24,72 @@ Be more expressive and DRY up (although not so much yet) your Erlang common test
     * support '-easy_test(...)' Opts in -easy_group
     * refactor to use erl_parse:abstract instead of explicitly writing each update to the AST. 
 
+## Example
+
+Below is a common test suite and a possible conversion using easy_test. Because easy_test is flexible there are other ways to achieve the same result.
+
+    # common_test suite
+    -module(a_SUITE).
+    -include_lib("common_test/include/ct.hrl").
+    -export([all/0, groups/0]).
+    -export([t1/0, t1/1, t2/1, t3/3]).
+    
+    groups() ->
+      [{g1,
+       [shuffle, sequence],
+       [t2, t3]}].
+       
+    all() ->
+      [{group, g1}, t1].
+      
+    t1() ->
+      [{required, some_var}].
+      
+    t1(_) ->
+      ...
+      
+    t2(_) ->
+      ...
+      
+    t3(_) ->
+      ...
+      
+    # equivalent easy_test suite
+    -module(a_SUITE).
+    -include_lib("easy_test/include/easy_test.hrl").
+    
+    -easy_group([{group, g1}, {opts, [shuffle, sequence]}, {tests, [t2, t3]}]).
+    -easy_test([{test, t1}, {has_config, true}]).
+      
+    t1() ->
+      [{required, some_var}].
+      
+    t1(_) ->
+      ...
+      
+    t2(_) ->
+      ...
+      
+    t3(_) ->
+      ...
+
 ## Credits
 
 Thanks to Richard Carlsson and Mickaël Rémond (authors of [EUnit](http://svn.process-one.net/contribs/trunk/eunit/doc/overview-summary.html)). 
 Their code in the eunit_autoexport module forms the basis of this library's functionality.
+
+## Contributing to easy_test
+
+* Fork the project
+* Start a feature/bugfix branch
+* Commit and push until your contribution is prepared
+* Please add test cases for your code and make sure all tests pass
+* Unless necessary do not edit src/easy_test.app.src
+  * If you do edit this file please explain why in your pull request
+* Submit a pull request
+
+If you submit a pull request (whether it is accepted or not) and would like to become a contributor on the project please note this the request or seperate message and you will be added.     
+
+## Copyright
+
+Copyright (c) 2011 Jordan West. See LICENSE.txt for further detais.
