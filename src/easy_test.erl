@@ -248,17 +248,8 @@ write_groups_data([{Group, Opts, _, _} | Groups]) ->
 	       write_test_list(Tests)]},
      write_groups_data(Groups)}.
 
-write_group_opts([]) ->
-    {nil, 0};
-write_group_opts([{R, T} | Opts]) ->
-    {cons,0,
-     {tuple,0,[{atom,0,R},
-	       {atom,0,T}]},
-     write_group_opts(Opts)};
-write_group_opts([Opt | Opts]) when is_atom(Opt) ->
-    {cons,0,
-     {atom,0,Opt},
-     write_group_opts(Opts)}.
+write_group_opts(Opts) ->
+    erl_parse:abstract(Opts).
 
 write_group_init_fun(As, []) -> % dont write init_per_group/2 if there are no init funs
     As;
