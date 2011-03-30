@@ -174,13 +174,14 @@ rewrite([], As, ExpFuns = #exp_funs{all=ExpAll,groups=ExpGroups,init_per_group=E
 module_decl(M, Fs) ->
     AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
     {Fs1, EF} = rewrite(Fs, [], #exp_funs{}),
-    Es = if EF#exp_funs.all -> [{all, 0} | AllExports];
-	    true -> AllExports end,
-    Es1 = if EF#exp_funs.groups -> [{groups, 0} | Es];
-	     true -> Es end,
-    Es2 = if EF#exp_funs.init_per_group -> [{init_per_group, 2} | Es1];
-	     true -> Es1 end,
-    [M, {attribute,0,export,Es2} | lists:reverse(Fs1)].
+    Es = prepend_if_true(EF#exp_funs.init_per_group,		    
+			 {init_per_group, 2},
+			 prepend_if_true(EF#exp_funs.groups,
+					 {groups, 0},				   
+					 prepend_if_true(EF#exp_funs.all, 
+							 {all, 0}, 
+							 AllExports))),
+    [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
 
 create_tables([]) ->
     ok;
@@ -294,6 +295,10 @@ write_test_list([{_, test, Test} | Tests]) ->
      {atom,0,Test},
      write_test_list(Tests)}.
 
+prepend_if_true(Exp, Elem, List) when is_boolean(Exp) andalso is_list(List)->
+    if Exp -> [Elem | List];
+       true -> List end.
+		   	      
 apply_if_true(_, [], _) ->
     ok;
 apply_if_true(Bool, [F | Fs], [Args | ArgsList]) ->
