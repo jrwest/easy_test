@@ -18,6 +18,10 @@
 -define(EASY_GROUP_DEFAULT_OPTS, [shuffle]).
 -define(EASY_GROUP_NO_INIT_FUN, nil).
 
+-record(exp_funs, {all=true,
+		   groups=true,
+		   init_per_group=true}).
+
 parse_transform(Forms, _) ->
     create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
     scan_forms(Forms),
@@ -154,27 +158,27 @@ rewrite([]) ->
     []. % missing module delcaration failsafe
 
 % TODO refactor third arg to be a record
-rewrite([{function, _, all, 0, _}=F | Fs], As, {_, ExportGroups, ExportGroupInits}) ->    
-    rewrite(Fs, [F | As], {false, ExportGroups, ExportGroupInits});
-rewrite([{function, _, groups, 0, _}=F | Fs], As, {ExportAll, _, ExportGroupInits}) ->
-    rewrite(Fs, [F | As], {ExportAll, false, ExportGroupInits});
-rewrite([{function, _, init_per_group, 2, _}=F | Fs], As, {ExportAll, ExportGroups, _}) ->
-    rewrite(Fs, [F | As], {ExportAll, ExportGroups, false});    
-rewrite([F | Fs], As, ExportData) -> 
-    rewrite(Fs, [F | As], ExportData);
-rewrite([], As, {ExportAllFun, ExportGroupsFun, ExportGroupInits}) ->
-    Final = write_all(write_groups(As, ExportGroupsFun, ExportGroupInits), ExportAllFun),
-    {Final, {ExportAllFun, ExportGroupsFun, ExportGroupInits}}.
+rewrite([{function, _, all, 0, _}=F | Fs], As, ExpFuns) ->    
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{all=false});
+rewrite([{function, _, groups, 0, _}=F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{groups=false});
+rewrite([{function, _, init_per_group, 2, _}=F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{init_per_group=false});    
+rewrite([F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns);
+rewrite([], As, ExpFuns = #exp_funs{all=ExpAll,groups=ExpGroups,init_per_group=ExpGrpInits}) ->
+    Final = write_all(write_groups(As, ExpGroups, ExpGrpInits), ExpAll),
+    {Final, ExpFuns}.
 	
 
 module_decl(M, Fs) ->
     AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
-    {Fs1, {ExportAllFun, ExportGroupsFun, ExportGroupInits}} = rewrite(Fs, [], {true, true, true}),
-    Es = if ExportAllFun -> [{all, 0} | AllExports];
+    {Fs1, EF} = rewrite(Fs, [], #exp_funs{}),
+    Es = if EF#exp_funs.all -> [{all, 0} | AllExports];
 	    true -> AllExports end,
-    Es1 = if ExportGroupsFun -> [{groups, 0} | Es];
+    Es1 = if EF#exp_funs.groups -> [{groups, 0} | Es];
 	     true -> Es end,
-    Es2 = if ExportGroupInits -> [{init_per_group, 2} | Es1];
+    Es2 = if EF#exp_funs.init_per_group -> [{init_per_group, 2} | Es1];
 	     true -> Es1 end,
     [M, {attribute,0,export,Es2} | lists:reverse(Fs1)].
 
