@@ -14,7 +14,9 @@
 -define(EASY_GROUPS_ETS, easy_groups).
 
 -define(EASY_TEST_PREFIX, "test_").
+-define(EASY_GROUP_INIT_PREFIX, "init_group_").
 -define(EASY_GROUP_DEFAULT_OPTS, [shuffle]).
+-define(EASY_GROUP_NO_INIT_FUN, nil).
 
 parse_transform(Forms, _) ->
     create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
@@ -50,9 +52,24 @@ form({function, _L, Name, 1, _Cs}, TestPrefix) ->
 	          [fun store_export/2,
 		   fun store_test/2],
 	          [[Name, 1],
-		   [all, Name]]);
+		   [all, Name]]),
+    apply_if_true(lists:prefix(?EASY_GROUP_INIT_PREFIX, NameAsList),
+		 fun store_group_init/2, [Name, NameAsList]);
 form(_, _) ->
     skipped.
+
+store_group_init(FunName, AsList) ->
+    {_, GroupAsList} = lists:split(length(?EASY_GROUP_INIT_PREFIX), AsList),
+    GroupName = list_to_atom(GroupAsList),
+    case does_group_exist(GroupName) of
+	true ->
+	    store_export(FunName, 1),
+	    [{GroupName, Opts, Context, _} | _] = ets:lookup(?EASY_GROUPS_ETS, GroupName),
+	    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, Context, FunName});
+	false ->
+	    skipped % if 'group_' function detection is implemented the
+		    % skipping here may need to be changed to group creation
+    end.
 
 store_export(Name,Arity) ->
     ets:insert(?EASY_TESTS_ETS, {make_ref(), Name, Arity}).
@@ -64,18 +81,25 @@ store_test(GroupName, Test) ->
     ets:insert(GroupSetName, {make_ref(), test, Test}).
 
 store_or_update_group(Name, Context, Opts, Tests) ->
+    store_or_update_group(Name, Context, Opts, Tests, nil).
+
+store_or_update_group(Name, Context, Opts, Tests, NewInit) ->
     case ets:lookup(?EASY_GROUPS_ETS, Name) of
 	[] ->
 	    store_group(Name, Context, Opts);
-	[{N, _O, OldContext} | _] ->
+	[{N, _O, OldContext, Init} | _] ->
+	    FinalInit = case NewInit of 
+			    nil -> Init;
+			    NewInit when is_function(NewInit) -> 
+				NewInit
+			end,
 	    move_group(OldContext, Context, Name),
-	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context})
+	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context, FinalInit})
     end,
     store_group_attr_tests(Name, Tests).
 
 store_group_if_dne(GroupName) ->
-    GroupTableName = group_table_name(GroupName),
-    case lists:member(GroupTableName, ets:all()) of
+    case does_group_exist(GroupName) of
 	false ->
 	    store_group(GroupName, all),
 	    created;
@@ -91,7 +115,7 @@ store_group(GroupName, ParentName, Opts) ->
     ParentSetName = group_table_name(ParentName),
     GroupSetName = group_table_name(GroupName),
     create_table(GroupSetName),
-    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, ParentName}),
+    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, ParentName, ?EASY_GROUP_NO_INIT_FUN}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
 move_group(OldContext, NewContext, GroupName) ->
@@ -106,6 +130,9 @@ store_group_attr_tests(Name, [T | Ts]) ->
     store_test(Name, T),
     store_export(T, 1),
     store_group_attr_tests(Name, Ts).
+
+does_group_exist(GroupName) when is_atom(GroupName) ->
+    lists:member(group_table_name(GroupName), ets:all()).
 
 group_table_name(Group) ->
     list_to_atom("easy_group_" ++ atom_to_list(Group)).
@@ -126,25 +153,30 @@ rewrite([F | Fs]) -> % skip anything before the module declaration in the forms 
 rewrite([]) -> 
     []. % missing module delcaration failsafe
 
-rewrite([{function, _, all, 0, _}=F | Fs], As, {_, ExportGroups}) ->    
-    rewrite(Fs, [F | As], {false, ExportGroups});
-rewrite([{function, _, groups, 0, _}=F | Fs], As, {ExportAll, _}) ->
-    rewrite(Fs, [F | As], {ExportAll, false});
+% TODO refactor third arg to be a record
+rewrite([{function, _, all, 0, _}=F | Fs], As, {_, ExportGroups, ExportGroupInits}) ->    
+    rewrite(Fs, [F | As], {false, ExportGroups, ExportGroupInits});
+rewrite([{function, _, groups, 0, _}=F | Fs], As, {ExportAll, _, ExportGroupInits}) ->
+    rewrite(Fs, [F | As], {ExportAll, false, ExportGroupInits});
+rewrite([{function, _, init_per_group, 2, _}=F | Fs], As, {ExportAll, ExportGroups, _}) ->
+    rewrite(Fs, [F | As], {ExportAll, ExportGroups, false});    
 rewrite([F | Fs], As, ExportData) -> 
     rewrite(Fs, [F | As], ExportData);
-rewrite([], As, {ExportAllFun, ExportGroupsFun}) ->
-    Final = write_all(write_groups(As, ExportGroupsFun), ExportAllFun),
-    {Final, {ExportAllFun, ExportGroupsFun}}.
+rewrite([], As, {ExportAllFun, ExportGroupsFun, ExportGroupInits}) ->
+    Final = write_all(write_groups(As, ExportGroupsFun, ExportGroupInits), ExportAllFun),
+    {Final, {ExportAllFun, ExportGroupsFun, ExportGroupInits}}.
 	
 
 module_decl(M, Fs) ->
     AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
-    {Fs1, {ExportAllFun, ExportGroupsFun}} = rewrite(Fs, [], {true, true}),
+    {Fs1, {ExportAllFun, ExportGroupsFun, ExportGroupInits}} = rewrite(Fs, [], {true, true, true}),
     Es = if ExportAllFun -> [{all, 0} | AllExports];
 	    true -> AllExports end,
     Es1 = if ExportGroupsFun -> [{groups, 0} | Es];
 	     true -> Es end,
-    [M, {attribute,0,export,Es1} | lists:reverse(Fs1)].
+    Es2 = if ExportGroupInits -> [{init_per_group, 2} | Es1];
+	     true -> Es1 end,
+    [M, {attribute,0,export,Es2} | lists:reverse(Fs1)].
 
 create_tables([]) ->
     ok;
@@ -190,11 +222,17 @@ prepare_exports([H | T], Acc) ->
     {_, Name, Arity} = H,
     prepare_exports(T, [{Name, Arity} | Acc]).
 
-write_groups(As, false) ->
+write_groups(As, false, false) ->
     As;
-write_groups(As, true) ->
+write_groups(As, true, WriteGroupInit) ->
     Groups = fetch_table_data(?EASY_GROUPS_ETS),
-    write_groups0(As, Groups).
+    write_groups(write_groups0(As, Groups), false, WriteGroupInit);
+write_groups(As, _, true) ->
+    Groups = fetch_table_data(?EASY_GROUPS_ETS),
+    Map = fun({Name, _, _, Fun}) -> {Name, Fun} end,
+    Filter = fun({_, Fun}) -> Fun =/= ?EASY_GROUP_NO_INIT_FUN end,
+    InitFuns = lists:filter(Filter, lists:map(Map, Groups)),
+    write_group_init_fun(As, InitFuns).
 
 write_groups0(As, Groups) ->
     [{function,0,groups,0,
@@ -202,7 +240,7 @@ write_groups0(As, Groups) ->
 
 write_groups_data([]) ->
     {nil, 0};
-write_groups_data([{Group, Opts, _} | Groups]) ->
+write_groups_data([{Group, Opts, _, _} | Groups]) ->
     Tests = fetch_table_data(group_table_name(Group)),
     {cons,0,
      {tuple,0,[{atom,0,Group},
@@ -222,6 +260,24 @@ write_group_opts([Opt | Opts]) when is_atom(Opt) ->
      {atom,0,Opt},
      write_group_opts(Opts)}.
 
+write_group_init_fun(As, []) -> % dont write init_per_group/2 if there are no init funs
+    As;
+write_group_init_fun(As, InitFuns) ->
+    [{function,0,init_per_group,2,
+      write_group_init_clauses(InitFuns)} | As].
+
+write_group_init_clauses(InitFuns) ->
+    write_group_init_clauses(InitFuns, []).
+
+write_group_init_clauses([], Acc) ->
+    Acc;
+write_group_init_clauses([{GroupName, Fun} | InitFuns], Acc) ->
+    Clause = {clause,0,
+	      [{atom,0,GroupName},{var,0,'Config'}],
+	      [],
+	      [{call,0,{atom,0,Fun},[{var,0,'Config'}]}]},
+    write_group_init_clauses(InitFuns, [Clause | Acc]).
+	      
 write_all(As, false) ->
     As;
 write_all(As, true) ->

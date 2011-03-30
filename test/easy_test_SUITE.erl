@@ -10,7 +10,7 @@
 
 -include_lib("easy_test/include/easy_test.hrl").
 
--export([init_per_group/2, end_per_group/2, init_per_suite/1, end_per_suite/1]).
+-export([end_per_group/2, init_per_suite/1, end_per_suite/1]).
 
 -easy_group([{group, group_2}, {context, group_1}]).
 -easy_group([{group, group_3}, {context, group_4}]).
@@ -30,20 +30,24 @@ init_per_suite(Config) ->
 end_per_suite(_) ->
     ok.
 
-init_per_group(group_1, Config) ->
-    [{group_1, 1} | Config];
-init_per_group(group_2, Config) ->
-    [{group_2, 2} | Config];
-init_per_group(group_3, Config) ->
-    [{group_3, 3} | Config];
-init_per_group(group_4, Config) ->
-    [{group_4, 4} | Config];
-init_per_group(group_5, Config) ->
-    [{group_5, 5} | Config];
-init_per_group(group_6, Config) ->
+
+init_group_group_1(Config) ->
+    [{group_1, 1} | Config].
+
+init_group_group_2(Config) ->
+    [{group_2, 2} | Config].
+
+init_group_group_3(Config) ->
+    [{group_3, 3} | Config].
+
+init_group_group_4(Config) ->    
+    [{group_4, 4} | Config].
+
+init_group_group_5(Config) ->
+    [{group_5, 5} | Config].
+
+init_group_group_6(Config) ->
     [{group_6, 6} | Config].
-
-
 
 end_per_group(_, _) ->
     ok.
