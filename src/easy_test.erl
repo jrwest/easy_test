@@ -234,9 +234,7 @@ write_groups(As, true, WriteGroupInit) ->
     write_groups(write_groups0(As, Groups), false, WriteGroupInit);
 write_groups(As, _, true) ->
     Groups = fetch_table_data(?EASY_GROUPS_ETS),
-    Map = fun({Name, _, _, Fun}) -> {Name, Fun} end,
-    Filter = fun({_, Fun}) -> Fun =/= ?EASY_GROUP_NO_INIT_FUN end,
-    InitFuns = lists:filter(Filter, lists:map(Map, Groups)),
+    InitFuns = [{Name, Fun} || {Name, _, _, Fun} <- Groups, Fun =/= ?EASY_GROUP_NO_INIT_FUN],
     write_group_init_fun(As, InitFuns).
 
 write_groups0(As, Groups) ->
