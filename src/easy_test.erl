@@ -255,7 +255,7 @@ write_group_opts(Opts) ->
     erl_parse:abstract(Opts).
 
 write_group_init_fun(As, []) -> % write a catch-all if no init funs exist
-  [{function,0,init_per_group,0,
+  [{function,0,init_per_group,2,
     [{clause,0,[{var,34,'_'},{var,34,'Config'}],[],[{var,35,'Config'}]}]} | As];
 write_group_init_fun(As, InitFuns) ->
     [{function,0,init_per_group,2,
