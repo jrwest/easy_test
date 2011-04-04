@@ -15,13 +15,29 @@
 
 -define(EASY_TEST_PREFIX, "test_").
 -define(EASY_GROUP_INIT_PREFIX, "init_group_").
+-define(EASY_GROUP_END_PREFIX, "end_group_").
 -define(EASY_GROUP_DEFAULT_OPTS, [shuffle]).
 -define(EASY_GROUP_NO_INIT_FUN, nil).
+-define(EASY_GROUP_NO_END_FUN, nil).
+
+-define(END_GRP_CATCH_ALL_CLAUSE,
+	{clause, 0, [{var, 0, '_'}, {var, 0, '_'}], [],
+	 [{atom, 0, ok}]}).
+-define(END_GRP_CATCH_ALL,
+        {function, 0, end_per_group, 2,
+         [?END_GRP_CATCH_ALL_CLAUSE]}).
+
+-define(INIT_GRP_CATCH_ALL_CLAUSE,
+	 {clause,0,[{var,34,'_'},{var,34,'Config'}],[],[{var,35,'Config'}]}).
+-define(INIT_GRP_CATCH_ALL,
+	{function,0,init_per_group,2,
+	 [?INIT_GRP_CATCH_ALL_CLAUSE]}).
 
 -record(exp_funs, {all=true,
 		   groups=true,
 		   init_per_group=true,
 		   end_per_group=true}).
+
 
 parse_transform(Forms, _) ->
     create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
@@ -59,7 +75,9 @@ form({function, _L, Name, 1, _Cs}, TestPrefix) ->
 	          [[Name, 1],
 		   [all, Name]]),
     apply_if_true(lists:prefix(?EASY_GROUP_INIT_PREFIX, NameAsList),
-		 fun store_group_init/2, [Name, NameAsList]);
+		  fun store_group_init/2, [Name, NameAsList]),
+    apply_if_true(lists:prefix(?EASY_GROUP_END_PREFIX, NameAsList),
+		  fun store_group_end/2, [Name, NameAsList]);
 form(_, _) ->
     skipped.
 
@@ -69,11 +87,23 @@ store_group_init(FunName, AsList) ->
     case does_group_exist(GroupName) of
 	true ->
 	    store_export(FunName, 1),
-	    [{GroupName, Opts, Context, _} | _] = ets:lookup(?EASY_GROUPS_ETS, GroupName),
-	    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, Context, FunName});
+	    [{GroupName, Opts, Context, _, EndFun} | _] = ets:lookup(?EASY_GROUPS_ETS, GroupName),
+	    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, Context, FunName, EndFun});
 	false ->
 	    skipped % if 'group_' function detection is implemented the
 		    % skipping here may need to be changed to group creation
+    end.
+
+store_group_end(FunName, AsList) ->
+    {_, GroupAsList} = lists:split(length(?EASY_GROUP_END_PREFIX), AsList),
+    GroupName = list_to_atom(GroupAsList),
+    case does_group_exist(GroupName) of
+	true ->
+	    store_export(FunName, 1),
+	    [{GroupName, Opts, Context, InitFun, _} | _] = ets:lookup(?EASY_GROUPS_ETS, GroupName),
+	    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, Context, InitFun, FunName});
+	false ->
+	    skipped % see not in store_group_init
     end.
 
 store_export(Name,Arity) ->
@@ -86,20 +116,25 @@ store_test(GroupName, Test) ->
     ets:insert(GroupSetName, {make_ref(), test, Test}).
 
 store_or_update_group(Name, Context, Opts, Tests) ->
-    store_or_update_group(Name, Context, Opts, Tests, nil).
+    store_or_update_group(Name, Context, Opts, Tests, nil, nil).
 
-store_or_update_group(Name, Context, Opts, Tests, NewInit) ->
+store_or_update_group(Name, Context, Opts, Tests, NewInit, NewEnd) ->
     case ets:lookup(?EASY_GROUPS_ETS, Name) of
 	[] ->
 	    store_group(Name, Context, Opts);
-	[{N, _O, OldContext, Init} | _] ->
+	[{N, _O, OldContext, Init, End} | _] ->
 	    FinalInit = case NewInit of 
 			    nil -> Init;
 			    NewInit when is_function(NewInit) -> 
 				NewInit
 			end,
+	    FinalEnd = case NewEnd of 
+			   nil -> End;
+			   NewEnd when is_function(NewEnd) ->
+			       NewEnd
+		       end,
 	    move_group(OldContext, Context, Name),
-	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context, FinalInit})
+	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context, FinalInit, FinalEnd})
     end,
     store_group_attr_tests(Name, Tests).
 
@@ -120,7 +155,7 @@ store_group(GroupName, ParentName, Opts) ->
     ParentSetName = group_table_name(ParentName),
     GroupSetName = group_table_name(GroupName),
     create_table(GroupSetName),
-    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, ParentName, ?EASY_GROUP_NO_INIT_FUN}),
+    ets:insert(?EASY_GROUPS_ETS, {GroupName, Opts, ParentName, ?EASY_GROUP_NO_INIT_FUN, ?EASY_GROUP_NO_END_FUN}),
     ets:insert(ParentSetName, {make_ref(), group, GroupName}).
 		     
 move_group(OldContext, NewContext, GroupName) ->
@@ -235,9 +270,10 @@ write_groups(As, #exp_funs{groups=false,init_per_group=false}) ->
     As;
 write_groups(As, #exp_funs{groups=DoGrp,init_per_group=DoInit,end_per_group=DoEnd}) ->
     Groups = fetch_table_data(?EASY_GROUPS_ETS),
-    InitFuns = [{Name, Fun} || {Name, _, _, Fun} <- Groups, Fun =/= ?EASY_GROUP_NO_INIT_FUN],
+    InitFuns = [{Name, InitFun} || {Name, _, _, InitFun, _} <- Groups, InitFun =/= ?EASY_GROUP_NO_INIT_FUN],
+    EndFuns = [{Name, EndFun} || {Name, _, _, _, EndFun} <- Groups, EndFun =/= ?EASY_GROUP_NO_END_FUN],
     prepend_if_true(DoEnd,
-		    write_group_end_fun([]),		   
+		    write_group_end_fun(EndFuns),		   
 		    prepend_if_true(DoInit,
 				    write_group_init_fun(InitFuns),
 				    prepend_if_true(DoGrp, write_groups0(Groups), As))).
@@ -248,7 +284,7 @@ write_groups0(Groups) ->
 
 write_groups_data([]) ->
     {nil, 0};
-write_groups_data([{Group, Opts, _, _} | Groups]) ->
+write_groups_data([{Group, Opts, _, _, _} | Groups]) ->
     Tests = fetch_table_data(group_table_name(Group)),
     {cons,0,
      {tuple,0,[{atom,0,Group},
@@ -260,27 +296,41 @@ write_group_opts(Opts) ->
     erl_parse:abstract(Opts).
 
 write_group_init_fun([]) -> % write a catch-all if no init funs exist
-    {function,0,init_per_group,2,
-     [{clause,0,[{var,0,'_'},{var,0,'Config'}],[],[{var,0,'Config'}]}]};
+    ?INIT_GRP_CATCH_ALL;
 write_group_init_fun(InitFuns) ->
     {function,0,init_per_group,2,
      write_group_init_clauses(InitFuns)}.
 
 write_group_end_fun([]) ->
+    ?END_GRP_CATCH_ALL;
+write_group_end_fun(EndFuns) ->
     {function,0,end_per_group,2,
-     [{clause,0,[{var,0,'_'},{var,0,'_'}],[],[{atom,0,'ok'}]}]}.
+     write_group_end_clauses(EndFuns)}.
 
+%% TODO these could probably be refactored into one fun
 write_group_init_clauses(InitFuns) ->
     write_group_init_clauses(InitFuns, []).
 
+write_group_end_clauses(EndFuns) ->
+    write_group_end_clauses(EndFuns, []).
+
 write_group_init_clauses([], Acc) ->
-    Acc;
+    Acc ++ [?INIT_GRP_CATCH_ALL_CLAUSE];
 write_group_init_clauses([{GroupName, Fun} | InitFuns], Acc) ->
     Clause = {clause,0,
 	      [{atom,0,GroupName},{var,0,'Config'}],
 	      [],
 	      [{call,0,{atom,0,Fun},[{var,0,'Config'}]}]},
     write_group_init_clauses(InitFuns, [Clause | Acc]).
+
+write_group_end_clauses([], Acc) ->
+    Acc ++ [?END_GRP_CATCH_ALL_CLAUSE];
+write_group_end_clauses([{GroupName, Fun} | EndFuns], Acc) ->
+    Clause = {clause,0,
+	      [{atom,0,GroupName},{var,0,'Config'}],
+	      [],
+	      [{call,0,{atom,0,Fun},[{var,0,'Config'}]}]},
+    write_group_end_clauses(EndFuns, [Clause | Acc]).
 	      
 write_all(As, false) ->
     As;

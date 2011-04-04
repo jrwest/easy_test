@@ -48,7 +48,9 @@ init_group_group_5(Config) ->
 
 init_group_group_6(Config) ->
     [{group_6, 6} | Config].
-
+    
+end_group_group_6(Config) ->
+    ok.
 
 %% This function should be autoexported and the test 
 %% will pass if it is; if not it will fail
