@@ -10,7 +10,7 @@
 
 -include_lib("easy_test/include/easy_test.hrl").
 
--export([end_per_group/2, init_per_suite/1, end_per_suite/1]).
+-export([init_per_suite/1, end_per_suite/1]).
 
 -easy_group([{group, group_2}, {context, group_1}]).
 -easy_group([{group, group_3}, {context, group_4}]).
@@ -49,8 +49,6 @@ init_group_group_5(Config) ->
 init_group_group_6(Config) ->
     [{group_6, 6} | Config].
 
-end_per_group(_, _) ->
-    ok.
 
 %% This function should be autoexported and the test 
 %% will pass if it is; if not it will fail

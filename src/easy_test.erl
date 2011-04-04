@@ -20,7 +20,8 @@
 
 -record(exp_funs, {all=true,
 		   groups=true,
-		   init_per_group=true}).
+		   init_per_group=true,
+		   end_per_group=true}).
 
 parse_transform(Forms, _) ->
     create_tables([?EASY_TESTS_ETS, ?EASY_GROUPS_ETS, group_table_name(all)]),
@@ -157,31 +158,34 @@ rewrite([F | Fs]) -> % skip anything before the module declaration in the forms 
 rewrite([]) -> 
     []. % missing module delcaration failsafe
 
-% TODO refactor third arg to be a record
 rewrite([{function, _, all, 0, _}=F | Fs], As, ExpFuns) ->    
     rewrite(Fs, [F | As], ExpFuns#exp_funs{all=false});
 rewrite([{function, _, groups, 0, _}=F | Fs], As, ExpFuns) ->
     rewrite(Fs, [F | As], ExpFuns#exp_funs{groups=false});
 rewrite([{function, _, init_per_group, 2, _}=F | Fs], As, ExpFuns) ->
-    rewrite(Fs, [F | As], ExpFuns#exp_funs{init_per_group=false});    
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{init_per_group=false});
+rewrite([{function, _, end_per_group, 2, _}=F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{end_per_group=false});
 rewrite([F | Fs], As, ExpFuns) ->
     rewrite(Fs, [F | As], ExpFuns);
-rewrite([], As, ExpFuns = #exp_funs{all=ExpAll,groups=ExpGroups,init_per_group=ExpGrpInits}) ->
-    Final = write_all(write_groups(As, ExpGroups, ExpGrpInits), ExpAll),
+rewrite([], As, ExpFuns = #exp_funs{all=ExpAll}) ->
+    Final = write_all(write_groups(As, ExpFuns), ExpAll),
     {Final, ExpFuns}.
 	
-
 module_decl(M, Fs) ->
     AllExports = prepare_exports(fetch_table_data(?EASY_TESTS_ETS), []),
     {Fs1, EF} = rewrite(Fs, [], #exp_funs{}),
-    Es = prepend_if_true(EF#exp_funs.init_per_group,		    
-			 {init_per_group, 2},
-			 prepend_if_true(EF#exp_funs.groups,
-					 {groups, 0},				   
-					 prepend_if_true(EF#exp_funs.all, 
-							 {all, 0}, 
-							 AllExports))),
-    [M, {attribute,0,export,Es} | lists:reverse(Fs1)].
+    Es = prepend_if_true(EF#exp_funs.groups,
+			 {groups, 0},				   
+			 prepend_if_true(EF#exp_funs.all, 
+					 {all, 0}, 
+					 AllExports)),
+    Es1 = prepend_if_true(EF#exp_funs.end_per_group,
+			  {end_per_group, 2},
+			  prepend_if_true(EF#exp_funs.init_per_group,		    
+					  {init_per_group, 2},
+					  Es)),
+    [M, {attribute,0,export,Es1} | lists:reverse(Fs1)].
 
 create_tables([]) ->
     ok;
@@ -227,19 +231,20 @@ prepare_exports([H | T], Acc) ->
     {_, Name, Arity} = H,
     prepare_exports(T, [{Name, Arity} | Acc]).
 
-write_groups(As, false, false) ->
+write_groups(As, #exp_funs{groups=false,init_per_group=false}) ->
     As;
-write_groups(As, true, WriteGroupInit) ->
-    Groups = fetch_table_data(?EASY_GROUPS_ETS),
-    write_groups(write_groups0(As, Groups), false, WriteGroupInit);
-write_groups(As, _, true) ->
+write_groups(As, #exp_funs{groups=DoGrp,init_per_group=DoInit,end_per_group=DoEnd}) ->
     Groups = fetch_table_data(?EASY_GROUPS_ETS),
     InitFuns = [{Name, Fun} || {Name, _, _, Fun} <- Groups, Fun =/= ?EASY_GROUP_NO_INIT_FUN],
-    write_group_init_fun(As, InitFuns).
-
-write_groups0(As, Groups) ->
-    [{function,0,groups,0,
-      [{clause,0,[],[],[write_groups_data(Groups)]}]} | As].
+    prepend_if_true(DoEnd,
+		    write_group_end_fun([]),		   
+		    prepend_if_true(DoInit,
+				    write_group_init_fun(InitFuns),
+				    prepend_if_true(DoGrp, write_groups0(Groups), As))).
+      
+write_groups0(Groups) ->
+    {function,0,groups,0,
+     [{clause,0,[],[],[write_groups_data(Groups)]}]}.
 
 write_groups_data([]) ->
     {nil, 0};
@@ -254,12 +259,16 @@ write_groups_data([{Group, Opts, _, _} | Groups]) ->
 write_group_opts(Opts) ->
     erl_parse:abstract(Opts).
 
-write_group_init_fun(As, []) -> % write a catch-all if no init funs exist
-  [{function,0,init_per_group,2,
-    [{clause,0,[{var,34,'_'},{var,34,'Config'}],[],[{var,35,'Config'}]}]} | As];
-write_group_init_fun(As, InitFuns) ->
-    [{function,0,init_per_group,2,
-      write_group_init_clauses(InitFuns)} | As].
+write_group_init_fun([]) -> % write a catch-all if no init funs exist
+    {function,0,init_per_group,2,
+     [{clause,0,[{var,0,'_'},{var,0,'Config'}],[],[{var,0,'Config'}]}]};
+write_group_init_fun(InitFuns) ->
+    {function,0,init_per_group,2,
+     write_group_init_clauses(InitFuns)}.
+
+write_group_end_fun([]) ->
+    {function,0,end_per_group,2,
+     [{clause,0,[{var,0,'_'},{var,0,'_'}],[],[{atom,0,'ok'}]}]}.
 
 write_group_init_clauses(InitFuns) ->
     write_group_init_clauses(InitFuns, []).
