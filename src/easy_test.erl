@@ -116,25 +116,12 @@ store_test(GroupName, Test) ->
     ets:insert(GroupSetName, {make_ref(), test, Test}).
 
 store_or_update_group(Name, Context, Opts, Tests) ->
-    store_or_update_group(Name, Context, Opts, Tests, nil, nil).
-
-store_or_update_group(Name, Context, Opts, Tests, NewInit, NewEnd) ->
     case ets:lookup(?EASY_GROUPS_ETS, Name) of
 	[] ->
 	    store_group(Name, Context, Opts);
 	[{N, _O, OldContext, Init, End} | _] ->
-	    FinalInit = case NewInit of 
-			    nil -> Init;
-			    NewInit when is_function(NewInit) -> 
-				NewInit
-			end,
-	    FinalEnd = case NewEnd of 
-			   nil -> End;
-			   NewEnd when is_function(NewEnd) ->
-			       NewEnd
-		       end,
 	    move_group(OldContext, Context, Name),
-	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context, FinalInit, FinalEnd})
+	    ets:insert(?EASY_GROUPS_ETS, {N, Opts, Context, Init, End})
     end,
     store_group_attr_tests(Name, Tests).
 
