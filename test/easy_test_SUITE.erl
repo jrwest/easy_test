@@ -10,8 +10,6 @@
 
 -include_lib("easy_test/include/easy_test.hrl").
 
--export([init_per_suite/1, end_per_suite/1]).
-
 -easy_group([{group, group_2}, {context, group_1}]).
 -easy_group([{group, group_3}, {context, group_4}]).
 -easy_test([{test, autoexport_attr_test_function}, {has_config, false}]).

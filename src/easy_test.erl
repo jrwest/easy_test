@@ -35,6 +35,8 @@
 
 -record(exp_funs, {all=true,
 		   groups=true,
+		   init_per_suite=false,
+		   end_per_suite=false,
 		   init_per_group=true,
 		   end_per_group=true}).
 
@@ -188,6 +190,10 @@ rewrite([{function, _, init_per_group, 2, _}=F | Fs], As, ExpFuns) ->
     rewrite(Fs, [F | As], ExpFuns#exp_funs{init_per_group=false});
 rewrite([{function, _, end_per_group, 2, _}=F | Fs], As, ExpFuns) ->
     rewrite(Fs, [F | As], ExpFuns#exp_funs{end_per_group=false});
+rewrite([{function, _, init_per_suite, 1, _}=F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{init_per_suite=true});
+rewrite([{function, _, end_per_suite, 1, _}=F | Fs], As, ExpFuns) ->
+    rewrite(Fs, [F | As], ExpFuns#exp_funs{end_per_suite=true});
 rewrite([F | Fs], As, ExpFuns) ->
     rewrite(Fs, [F | As], ExpFuns);
 rewrite([], As, ExpFuns = #exp_funs{all=ExpAll}) ->
@@ -207,7 +213,12 @@ module_decl(M, Fs) ->
 			  prepend_if_true(EF#exp_funs.init_per_group,		    
 					  {init_per_group, 2},
 					  Es)),
-    [M, {attribute,0,export,Es1} | lists:reverse(Fs1)].
+    Es2 = prepend_if_true(EF#exp_funs.end_per_suite, 
+			  {end_per_suite, 1},
+			  prepend_if_true(EF#exp_funs.init_per_suite,
+					  {init_per_suite, 1},
+					  Es1)),
+    [M, {attribute,0,export,Es2} | lists:reverse(Fs1)].
 
 create_tables([]) ->
     ok;
