@@ -92,4 +92,4 @@ If you submit a pull request (whether it is accepted or not) and would like to b
 
 ## Copyright
 
-Copyright (c) 2011 Jordan West. See LICENSE.txt for further detais.
+Copyright (c) 2011 Jordan West, Richard Carlsson. See LICENSE.txt for further detais.
